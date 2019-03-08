@@ -1,0 +1,4 @@
+- float: https://nodemcu-build.com/builds/nodemcu-master-20-modules-2019-03-04-04-34-50-float.bin
+- integer: https://nodemcu-build.com/builds/nodemcu-master-20-modules-2019-03-04-04-34-50-integer.bin
+
+adc, cron, encoder, enduser_setup, file, gpio, http, i2c, net, node, ow, pcm, rtctime, sjson, sntp, spi, tmr, uart, wifi, tls.
