@@ -8,9 +8,11 @@ end
 
 gpio.mode(1, gpio.OUTPUT)
 
-swhour=nil
-swmin=nil
-swpin=nil
+swhour=""
+swmin=""
+
+swhouroff=""
+swminoff=""
 
 function tryonofftime(hv, mv, sv, onoff)
     tm = rtctime.epoch2cal(rtctime.get()+32400)
@@ -18,15 +20,17 @@ function tryonofftime(hv, mv, sv, onoff)
     ms = tm["min"]
     ss = tm["sec"]
     setflag=false
-    if hv~=nil and hs==tonumber(hv) then
-      if mv~=nil and ms==tonumber(mv) then
-        if sv==nil or (sv~=nil and ss==tonumber(sv)) then
-          setflag=true
+    if hv~="" or mv~="" then
+        if hv=="" or (hv~="" and hs==tonumber(hv)) then
+          if mv=="" or (mv~="" and ms==tonumber(mv)) then
+            if sv=="" or (sv~="" and ss>=tonumber(sv)) then
+              setflag=true
+            end
+          end
         end
-      end
-    end
-    if onoff~=nil and setflag then
-      gpio.write(1, onoff)
+        if onoff~=nil and setflag then
+          gpio.write(1, onoff)
+        end
     end
     return setflag
 end
@@ -51,66 +55,89 @@ srv:listen(80,function(conn)
         local _on,_off = "",""
         if(_GET.pin == "ON")then
               tmr.stop(1)
-              _on = " selected=\"true\""              
+              _on = " selected=true"              
               gpio.write(1, gpio.HIGH)
         elseif(_GET.pin == "OFF")then
               tmr.stop(1)
-              _off = " selected=\"true\""
+              _off = " selected=true"
               gpio.write(1, gpio.LOW)
         else
           if gpio.read(1)==1 then
-            _on = " selected=\"true\""
+            _on = " selected=true"
           else
-            _off = " selected=\"true\""
+            _off = " selected=true"
           end
         end
         -- hour, min
-        if _GET.hour~=nil then
-          swhour=_GET.hour
-        end
-        if _GET.min~=nil then
-          swmin=_GET.min
-        end
         if _GET.swpin~=nil then
-          if _GET.swpin=="ON" then
-            swpin=gpio.HIGH
-          else
-            swpin=gpio.LOW
-          end
-          tmr.stop(1)
-          tmr.alarm(1, 1000, tmr.ALARM_AUTO, function()
-            if tryonofftime(swhour, swmin, nil, swpin)==true then
-              tmr.stop(1)
+            if _GET.swpin=="ON" then
+                if _GET.hour~=nil then
+                  swhour=_GET.hour
+                else
+                  swhour=""
+                end
+                if _GET.min~=nil then
+                  swmin=_GET.min
+                else
+                  swmin=""
+                end
+            else 
+                if _GET.hour~=nil then
+                  swhouroff=_GET.hour
+                else
+                  swhouroff=""
+                end
+                if _GET.min~=nil then
+                  swminoff=_GET.min
+                else
+                  swminoff=""
+                end
             end
+        end
+        if swhour~="" or swmin~="" or swhouroff~="" or swminoff~="" then
+          tmr.alarm(1, 1000, tmr.ALARM_AUTO, function()
+            tryonofftime(swhour, swmin, "", gpio.HIGH)
+            tryonofftime(swhouroff, swminoff, "", gpio.LOW)
           end)
+        else
+          tmr.stop(1)
         end
         buf = buf.."<option".._on..">ON</opton><option".._off..">OFF</option></select></form>"
-        buf = buf.."<form id=form2 src=\"/\">Time<select name=\"hour\">"
+        -- on timer
+        buf = buf.."<form id=form2 src=\"/\">On/Off Time<select name=\"hour\"><option"
+        if swhour=="" then
+          buf = buf.." selected=true"
+        end
+        buf = buf.."></option>"
         for timehour=0,23 do
           buf = buf.."<option"
-          if (swhour~=nil and timehour==tonumber(swhour)) or (swhour==nil and timehour==tm["hour"]) then
+          if swhour~="" and timehour==tonumber(swhour) then
             buf=buf.." selected=true"
           end
           buf=buf..">"..tostring(timehour).."</option>"
         end
-        buf = buf.."</select>:<select name=\"min\">"
+        buf = buf.."</select>:<select name=\"min\"><option"
+        if swmin=="" then
+          buf = buf.." selected=true"
+        end
+        buf = buf.."></option>"
         for timemin=0,59 do
           buf = buf.."<option"
-          if (swmin~=nil and timemin==tonumber(swmin)) or (swmin==nil and timemin==tm["min"]) then
+          if swmin~="" and timemin==tonumber(swmin) then
             buf=buf.." selected=true"
           end
           buf=buf..">"..tostring(timemin).."</option>"
         end
-        buf = buf.."</select>SW<select name=\"swpin\">"
-        buf = buf.."<option"
-        if swpin~=nil and swpin==gpio.HIGH then
-          buf=buf.." selected=true"
-        end
-        buf = buf..">ON</option><option"
-        if swpin==nil or (swpin~=nil and swpin==gpio.LOW) then
-          buf=buf.." selected=true"
-        end
-        buf = buf..">OFF</option></select> <button type=submit>Set</button></form>"
+        _swon=""
+        _swoff=""
+        if swhour~="" or swmin~="" then
+          _swoff = " selected=true"
+        else
+          _swon = " selected=true"
+        end        
+        buf = buf.."</select><select name=swpin><option".._swon..">ON</option><option".._swoff..">OFF</option>"
+        buf = buf.."</select><button type=submit>Set</button></form>"
+        buf = buf..string.format("%2s:%2s (on) <br/> %2s:%2s (off)",swhour,swmin,swhouroff,swminoff)
         client:send(buf)
     end)
     conn:on("sent", function (c) c:close() end)
