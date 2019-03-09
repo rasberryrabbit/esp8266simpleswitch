@@ -35,6 +35,14 @@ function tryonofftime(hv, mv, sv, onoff)
     return setflag
 end
 
+function tmrout(s)
+  if s~="" then
+    return s
+  else
+    return "**"
+  end
+end
+
 srv=net.createServer(net.TCP)
 srv:listen(80,function(conn)
     conn:on("receive", function(client,request)
@@ -136,8 +144,8 @@ srv:listen(80,function(conn)
           _swon = " selected=true"
         end        
         buf = buf.."</select><select name=swpin><option".._swon..">ON</option><option".._swoff..">OFF</option>"
-        buf = buf.."</select><button type=submit>Set</button></form>"
-        buf = buf..string.format("%2s:%2s (on) <br/> %2s:%2s (off)",swhour,swmin,swhouroff,swminoff)
+        buf = buf.."</select><button type=submit>Set</button></form>"        
+        buf = buf..string.format("%2s:%2s (on) <br/> %2s:%2s (off)",tmrout(swhour),tmrout(swmin),tmrout(swhouroff),tmrout(swminoff))
         client:send(buf)
     end)
     conn:on("sent", function (c) c:close() end)
