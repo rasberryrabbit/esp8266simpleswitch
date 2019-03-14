@@ -13,6 +13,8 @@ swmin=""
 
 swhouroff=""
 swminoff=""
+timeractive=0
+dotimer=0
 
 function tryonofftime(hv, mv, sv, onoff)
     tm = rtctime.epoch2cal(rtctime.get()+32400)
@@ -62,13 +64,15 @@ srv:listen(80,function(conn)
         buf = buf.."<h1> Set relay</h1><form id=form1 src=\"/\">Turn PIN1 <select name=\"pin\" onchange=\"form.submit()\">"
         local _on,_off = "",""
         if(_GET.pin == "ON")then
-              tmr.stop(1)
               _on = " selected=true"              
               gpio.write(1, gpio.HIGH)
-        elseif(_GET.pin == "OFF")then
               tmr.stop(1)
+              timeractive=0
+        elseif(_GET.pin == "OFF")then
               _off = " selected=true"
               gpio.write(1, gpio.LOW)
+              tmr.stop(1)
+              timeractive=0
         else
           if gpio.read(1)==1 then
             _on = " selected=true"
@@ -77,41 +81,48 @@ srv:listen(80,function(conn)
           end
         end
         -- hour, min
+        local newhour=nil
+        local newmin=nil
         if _GET.swpin~=nil then
+            if _GET.hour~=nil then
+              newhour=_GET.hour
+            else
+              newhour=""
+            end
+            if _GET.min~=nil then
+              newmin=_GET.min
+            else
+              newmin=""
+            end
             if _GET.swpin=="ON" then
-                if _GET.hour~=nil then
-                  swhour=_GET.hour
-                else
-                  swhour=""
-                end
-                if _GET.min~=nil then
-                  swmin=_GET.min
-                else
-                  swmin=""
-                end
-            else 
-                if _GET.hour~=nil then
-                  swhouroff=_GET.hour
-                else
-                  swhouroff=""
-                end
-                if _GET.min~=nil then
-                  swminoff=_GET.min
-                else
-                  swminoff=""
-                end
+                swhour=newhour
+                swmin=newmin
+            else
+                swhouroff=newhour
+                swminoff=newmin
             end
         end
-        if swhour~="" or swmin~="" or swhouroff~="" or swminoff~="" then
-          tmr.alarm(1, 1000, tmr.ALARM_AUTO, function()
-            tryonofftime(swhour, swmin, "", gpio.HIGH)
-            tryonofftime(swhouroff, swminoff, "", gpio.LOW)
-          end)
-        else
-          tmr.stop(1)
+        if _GET.hour~=nil or _GET.min~=nil then
+          if newhour~="" or newmin~="" then
+              tmr.alarm(1, 1000, tmr.ALARM_AUTO, function()
+                tryonofftime(swhour, swmin, "", gpio.HIGH)
+                tryonofftime(swhouroff, swminoff, "", gpio.LOW)
+              end)
+              timeractive=1
+          else
+              tmr.stop(1)
+              timeractive=0
+          end
         end
         buf = buf.."<option".._on..">ON</opton><option".._off..">OFF</option></select></form>"
         -- on timer
+        buf = buf.."<p>Timer : "
+        if timeractive==0 then
+          buf = buf.."disabled"
+        else
+          buf = buf.."enabled"
+        end
+        buf = buf.."</p>"
         buf = buf.."<form id=form2 src=\"/\">On/Off Time<select name=\"hour\"><option"
         if swhour=="" then
           buf = buf.." selected=true"
@@ -150,3 +161,39 @@ srv:listen(80,function(conn)
     end)
     conn:on("sent", function (c) c:close() end)
 end)
+
+-- ssdp
+
+net.multicastJoin(wifi.sta.getip(), "239.255.255.250")
+
+local ssdp_notify = "NOTIFY * HTTP/1.1\r\n"..
+"HOST: 239.255.255.250:1900\r\n"..
+"CACHE-CONTROL: max-age=100\r\n"..
+"NT: upnp:rootdevice\r\n"..
+"USN: 6e50e521-6abc-4a06-8f5d-813ee1"..string.format("%x",node.chipid()).."::upnp:rootdevice\r\n"..
+"NTS: ssdp:alive\r\n"..
+"SERVER: NodeMCU/20190304 UPnP/1.1 ovoi/0.1\r\n"..
+"Location: http://"..wifi.sta.getip().."/switch.xml\r\n\r\n"
+
+
+local ssdp_response = "HTTP/1.1 200 OK\r\n"..
+"Cache-Control: max-age=100\r\n"..
+"EXT:\r\n"..
+"SERVER: NodeMCU/20190304 UPnP/1.1 ovoi/0.1\r\n"..
+"ST: upnp:rootdevice\r\n"..
+"USN: uuid:6e50e521-6abc-4a06-8f5d-813ee1"..string.format("%x",node.chipid()).."\r\n"..
+"Location: http://"..wifi.sta.getip().."/switch.xml\r\n\r\n"
+
+local function response(connection, payLoad, port, ip)
+    if string.match(payLoad,"M-SEARCH") then
+        connection:send(port,ip,ssdp_response)
+    end
+end
+
+tmr.alarm(3, 10000, 1, function()
+    UPnPd:send(1900,'239.255.255.250',ssdp_notify)
+end)
+
+UPnPd = net.createUDPSocket()
+UPnPd:on("receive", response )
+UPnPd:listen(1900,"0.0.0.0")
