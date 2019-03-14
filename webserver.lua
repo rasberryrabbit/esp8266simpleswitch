@@ -155,7 +155,8 @@ srv:listen(80,function(conn)
           _swon = " selected=true"
         end        
         buf = buf.."</select><select name=swpin><option".._swon..">ON</option><option".._swoff..">OFF</option>"
-        buf = buf.."</select><button type=submit>Set</button></form>"        
+        buf = buf.."</select><button type=submit>Set</button></form>"
+        buf = buf.."<form id=form3 src=\"/\"><input type=\"hidden\" name=\"pin\" value=\"OFF\"><input type=\"hidden\" name=\"hour\" value=\"\"><input type=\"hidden\" name=\"min\" value=\"\"><button type=submit>Reset</button></form>"
         buf = buf..string.format("%2s:%2s (on) <br/> %2s:%2s (off)",tmrout(swhour),tmrout(swmin),tmrout(swhouroff),tmrout(swminoff))
         client:send(buf)
     end)
