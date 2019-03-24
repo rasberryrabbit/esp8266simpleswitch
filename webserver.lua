@@ -1,5 +1,8 @@
 -- webserver.lua
 --webserver sample from the nodemcu github
+while wifi.sta.getip()==nil do
+  tmr.delay(100000)
+end
 print(wifi.sta.getip())
 
 sntp.sync(nil,nil,function() print("sntp failed") end,nil)
@@ -204,7 +207,7 @@ end)
 
 udp50k = net.createUDPSocket()
 
-tmr.alarm(5, 1000, 1, function()
+tmr.alarm(5, 3000, 1, function()
   udp50k:send(50000, wifi.sta.getbroadcast(), udp_response)
 end)
 
