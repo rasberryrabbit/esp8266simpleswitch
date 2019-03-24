@@ -1,8 +1,5 @@
 -- webserver.lua
 --webserver sample from the nodemcu github
-while wifi.sta.getip()==nil do
-  tmr.delay(100000)
-end
 print(wifi.sta.getip())
 
 sntp.sync(nil,nil,function() print("sntp failed") end,nil)
@@ -49,6 +46,10 @@ function tmrout(s)
   end
 end
 
+function toint(s)
+  return tonumber(s)
+end
+
 srv=net.createServer(net.TCP)
 srv:listen(80,function(conn)
     conn:on("receive", function(client,request)
@@ -90,11 +91,27 @@ srv:listen(80,function(conn)
         if _GET.swpin~=nil then
             if _GET.hour~=nil then
               newhour=_GET.hour
+              local y, x = pcall(toint,newhour)
+              if y==true then
+                if x>=24 then
+                  newhour="23"
+                end
+              else
+                newhour=""
+              end
             else
               newhour=""
             end
             if _GET.min~=nil then
               newmin=_GET.min
+              local y,x = pcall(toint,newmin)
+              if y==true then
+                if x>=60 then
+                  newmin="59"
+                end
+              else
+                newmin=""
+              end
             else
               newmin=""
             end
@@ -126,31 +143,21 @@ srv:listen(80,function(conn)
         else
           buf = buf.."enabled"
         end
+        local texthour=""
+        local textmin=""
+        if swhour~="" then
+          texthour=swhour
+        else
+          texthour=swhouroff
+        end
+        if swmin~="" then
+          textmin=swmin
+        else
+          textmin=swminoff
+        end
         buf = buf.."</p>"
-        buf = buf.."<form id=form2 src=\"/\">On/Off Time<select name=\"hour\"><option"
-        if swhour=="" then
-          buf = buf.." selected=true"
-        end
-        buf = buf.."></option>"
-        for timehour=0,23 do
-          buf = buf.."<option"
-          if swhour~="" and timehour==tonumber(swhour) then
-            buf=buf.." selected=true"
-          end
-          buf=buf..">"..tostring(timehour).."</option>"
-        end
-        buf = buf.."</select>:<select name=\"min\"><option"
-        if swmin=="" then
-          buf = buf.." selected=true"
-        end
-        buf = buf.."></option>"
-        for timemin=0,59 do
-          buf = buf.."<option"
-          if swmin~="" and timemin==tonumber(swmin) then
-            buf=buf.." selected=true"
-          end
-          buf=buf..">"..tostring(timemin).."</option>"
-        end
+        buf = buf.."<form id=form2 src=\"/\">On/Off Time<input type=\"text\" name=\"hour\" value=\""..texthour.."\">"
+        buf = buf..":<input type=\"text\" name=\"min\" value=\""..textmin.."\">"
         _swon=""
         _swoff=""
         if swhour~="" or swmin~="" then
@@ -158,7 +165,7 @@ srv:listen(80,function(conn)
         else
           _swon = " selected=true"
         end        
-        buf = buf.."</select><select name=swpin><option".._swon..">ON</option><option".._swoff..">OFF</option>"
+        buf = buf.."<select name=swpin><option".._swon..">ON</option><option".._swoff..">OFF</option>"
         buf = buf.."</select><button type=submit>Set</button></form>"
         buf = buf.."<form id=form3 src=\"/\"><input type=\"hidden\" name=\"pin\" value=\"OFF\"><input type=\"hidden\" name=\"hour\" value=\"\"><input type=\"hidden\" name=\"min\" value=\"\"><button type=submit>Reset</button></form>"
         buf = buf..string.format("%2s:%2s (on) <br/> %2s:%2s (off)",tmrout(swhour),tmrout(swmin),tmrout(swhouroff),tmrout(swminoff))
