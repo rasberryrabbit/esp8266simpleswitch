@@ -65,7 +65,7 @@ srv:listen(80,function(conn)
             end
         end
         tm = rtctime.epoch2cal(rtctime.get()+32400)
-        buf = buf..string.format("<h1>%04d/%02d/%02d %02d:%02d:%02d</h1>", tm["year"], tm["mon"], tm["day"], tm["hour"], tm["min"], tm["sec"])
+        buf = buf..string.format("<html><body><h1>%04d/%02d/%02d %02d:%02d:%02d</h1>", tm["year"], tm["mon"], tm["day"], tm["hour"], tm["min"], tm["sec"])
         buf = buf.."<h1> Set relay</h1><form id=form1 src=\"/\">Turn PIN1 <select name=\"pin\" onchange=\"form.submit()\">"
         local _on,_off = "",""
         if(_GET.pin == "ON")then
@@ -156,8 +156,8 @@ srv:listen(80,function(conn)
           textmin=swminoff
         end
         buf = buf.."</p>"
-        buf = buf.."<form id=form2 src=\"/\">On/Off Time<input type=\"text\" name=\"hour\" value=\""..texthour.."\">"
-        buf = buf..":<input type=\"text\" name=\"min\" value=\""..textmin.."\">"
+        buf = buf.."<form id=form2 src=\"/\">On/Off Time<input type=\"text\" name=\"hour\" value=\""..texthour.."\" size=3>"
+        buf = buf..":<input type=\"text\" name=\"min\" value=\""..textmin.."\" size=3>"
         _swon=""
         _swoff=""
         if swhour~="" or swmin~="" then
@@ -169,6 +169,7 @@ srv:listen(80,function(conn)
         buf = buf.."</select><button type=submit>Set</button></form>"
         buf = buf.."<form id=form3 src=\"/\"><input type=\"hidden\" name=\"pin\" value=\"OFF\"><input type=\"hidden\" name=\"hour\" value=\"\"><input type=\"hidden\" name=\"min\" value=\"\"><button type=submit>Reset</button></form>"
         buf = buf..string.format("%2s:%2s (on) <br/> %2s:%2s (off)",tmrout(swhour),tmrout(swmin),tmrout(swhouroff),tmrout(swminoff))
+        buf = buf.."</body></html>"
         client:send(buf)
     end)
     conn:on("sent", function (c) c:close() end)
