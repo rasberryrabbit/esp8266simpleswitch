@@ -1,6 +1,8 @@
 -- webserver.lua
 --webserver sample from the nodemcu github
 print(wifi.sta.getip())
+bcastip = string.match(wifi.sta.getip(),"(%d+%.%d+%.%d+%.)%d+").."255"
+
 sntp.sync(nil,nil,function() print("sntp failed") end,nil)
 if srv~=nil then
  srv:close()
@@ -173,14 +175,14 @@ local ssdp_notify = "NOTIFY * HTTP/1.1\r\n"..
 "NT: upnp:rootdevice\r\n"..
 "USN: 6e50e521-6abc-4a06-8f5d-813ee1"..string.format("%x",node.chipid()).."::upnp:rootdevice\r\n"..
 "NTS: ssdp:alive\r\n"..
-"SERVER: NodeMCU/20190304 UPnP/1.1 ovoi/0.1\r\n"..
+"SERVER: NodeMCU/20190304 UPnP/1.1\r\n"..
 "Location: http://"..wifi.sta.getip().."/switch.xml\r\n\r\n"
 
 
 local ssdp_response = "HTTP/1.1 200 OK\r\n"..
 "Cache-Control: max-age=100\r\n"..
 "EXT:\r\n"..
-"SERVER: NodeMCU/20190304 UPnP/1.1 ovoi/0.1\r\n"..
+"SERVER: NodeMCU/20190304 UPnP/1.1\r\n"..
 "ST: upnp:rootdevice\r\n"..
 "USN: uuid:6e50e521-6abc-4a06-8f5d-813ee1"..string.format("%x",node.chipid()).."\r\n"..
 "Location: http://"..wifi.sta.getip().."/switch.xml\r\n\r\n"
@@ -191,10 +193,27 @@ local function response(connection, payLoad, port, ip)
     end
 end
 
+UPnPd = net.createUDPSocket()
+UPnPd:on("receive", response )
+UPnPd:listen(1900,"0.0.0.0")
+
 tmr.alarm(3, 10000, 1, function()
     UPnPd:send(1900,'239.255.255.250',ssdp_notify)
 end)
 
-UPnPd = net.createUDPSocket()
-UPnPd:on("receive", response )
-UPnPd:listen(1900,"0.0.0.0")
+-- udp info
+
+local udp_response = wifi.sta.getip().."\nSWITCH-INFO\npin[ON|OFF],hour[24],min[60],swpin[ON|OFF]\n"
+
+local function response50k(connection, payLoad, port, ip)
+    if string.match(payLoad,"PING") then
+      connection:send(port,ip,udp_response)
+    end
+end
+
+udp50k = net.createUDPSocket()
+udp50k:on("receive", response50k)
+udp50k:listen(50000,"0.0.0.0")
+
+
+
