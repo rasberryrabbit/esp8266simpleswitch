@@ -17,7 +17,23 @@ if Resetta==1 then
     tmr.alarm(0, 5000, 0, function() dofile("riazzerawifi.lua") end)
 
 else
-    -- Start the webserver wiht ip defined by Wi-Fi router
-    tmr.alarm(0, 5000, 0, function() dofile("webserver.lua") end)
+    cnt = 10
+    tmr.alarm(0, 1000, 1, function()
+      if wifi.sta.getip()==nil then
+        cnt = cnt - 1
+        if cnt==0 then
+          tmr.stop(0)
+          gpio.mode(4,gpio.OUTPUT)
+          tmr.alarm(0, 500, 1, function()
+            gpio.write(4,1-gpio.read(4))
+          end)
+          print("Cannot get IP")
+        end
+      else
+        tmr.stop(0)
+        -- Start the webserver wiht ip defined by Wi-Fi router
+        tmr.alarm(0, 5000, 0, function() dofile("webserver.lua") end)
+      end
+    end)
 
 end
