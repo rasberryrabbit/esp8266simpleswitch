@@ -1,7 +1,6 @@
 -- webserver.lua
 --webserver sample from the nodemcu github
 print(wifi.sta.getip())
-bcastip = string.match(wifi.sta.getip(),"(%d+%.%d+%.%d+%.)%d+").."255"
 
 sntp.sync(nil,nil,function() print("sntp failed") end,nil)
 if srv~=nil then
