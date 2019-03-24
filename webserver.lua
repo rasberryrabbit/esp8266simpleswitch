@@ -186,6 +186,8 @@ local ssdp_response = "HTTP/1.1 200 OK\r\n"..
 "USN: uuid:6e50e521-6abc-4a06-8f5d-813ee1"..string.format("%x",node.chipid()).."\r\n"..
 "Location: http://"..wifi.sta.getip().."/switch.xml\r\n\r\n"
 
+local udp_response = wifi.sta.getip().."\n"..string.format("%x",node.chipid()).."\nSWITCH-INFO\npin[ON|OFF],hour[24],min[60],swpin[ON|OFF]\n"
+
 local function response(connection, payLoad, port, ip)
     if string.match(payLoad,"M-SEARCH") then
         connection:send(port,ip,ssdp_response)
@@ -200,19 +202,9 @@ tmr.alarm(3, 10000, 1, function()
     UPnPd:send(1900,'239.255.255.250',ssdp_notify)
 end)
 
--- udp info
-
-local udp_response = wifi.sta.getip().."\nSWITCH-INFO\npin[ON|OFF],hour[24],min[60],swpin[ON|OFF]\n"
-
-local function response50k(connection, payLoad, port, ip)
-    if string.match(payLoad,"PING") then
-      connection:send(port,ip,udp_response)
-    end
-end
-
 udp50k = net.createUDPSocket()
-udp50k:on("receive", response50k)
-udp50k:listen(50000,"0.0.0.0")
 
-
+tmr.alarm(5, 1000, 1, function()
+  udp50k:send(50000, wifi.sta.getbroadcast(), udp_response)
+end)
 
