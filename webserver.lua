@@ -9,6 +9,10 @@ end
 
 gpio.mode(1, gpio.OUTPUT)
 
+config = "setting.txt"
+onshotload = false
+
+autoload=""
 swhour=""
 swmin=""
 
@@ -50,6 +54,47 @@ function toint(s)
   return tonumber(s)
 end
 
+function checknil(s)
+  if s==nil then
+    return ""
+  else
+    return string.gsub(s, "%s+", "")
+  end
+end
+
+function load_setting()
+  if oneshotload~=true then
+    oneshotload=true
+  if file.exists(config) then
+    fc = file.open(config,"r")
+    autoload=checknil(fc:readline())
+    swhour=checknil(fc:readline())
+    swmin=checknil(fc:readline())
+    swhouroff=checknil(fc:readline())
+    swminoff=checknil(fc:readline())
+    fc:close()
+    -- start timer
+    if string.find(autoload,"YES") then
+      tmr.alarm(1, 1000, tmr.ALARM_AUTO, function()
+        tryonofftime(swhour, swmin, "", gpio.HIGH)
+        tryonofftime(swhouroff, swminoff, "", gpio.LOW)
+      end)
+      timeractive=1
+    end
+  end
+  end
+end
+
+function save_setting()
+  fc = file.open(config,"w")
+  fc:writeline(autoload)
+  fc:writeline(swhour)
+  fc:writeline(swmin)
+  fc:writeline(swhouroff)
+  fc:writeline(swminoff) 
+  fc:close()
+end
+
 srv=net.createServer(net.TCP)
 srv:listen(80,function(conn)
     conn:on("receive", function(client,request)
@@ -89,6 +134,7 @@ srv:listen(80,function(conn)
         local newhour=nil
         local newmin=nil
         if _GET.swpin~=nil then
+            autoload=checknil(_GET.autoload)
             if _GET.hour~=nil then
               newhour=_GET.hour
               local y, x = pcall(toint,newhour)
@@ -122,8 +168,19 @@ srv:listen(80,function(conn)
                 swhouroff=newhour
                 swminoff=newmin
             end
+            -- save config
+            if _GET.dosave=="YES" then
+              if pcall(save_setting)==false then
+                print("fail save config")
+              end
+            end
+        else
+            -- one shot load
+            pcall(load_setting)
         end
+        -- start timer
         if _GET.hour~=nil or _GET.min~=nil then
+          tmr.stop(1)
           if newhour~="" or newmin~="" then
               tmr.alarm(1, 1000, tmr.ALARM_AUTO, function()
                 tryonofftime(swhour, swmin, "", gpio.HIGH)
@@ -131,7 +188,6 @@ srv:listen(80,function(conn)
               end)
               timeractive=1
           else
-              tmr.stop(1)
               timeractive=0
           end
         end
@@ -165,9 +221,15 @@ srv:listen(80,function(conn)
         else
           _swon = " selected=true"
         end        
-        buf = buf.."<select name=swpin><option".._swon..">ON</option><option".._swoff..">OFF</option>"
-        buf = buf.."</select><button type=submit>Set</button></form>"
-        buf = buf.."<form id=form3 src=\"/\"><input type=\"hidden\" name=\"pin\" value=\"OFF\"><input type=\"hidden\" name=\"hour\" value=\"\"><input type=\"hidden\" name=\"min\" value=\"\"><button type=submit>Reset</button></form>"
+        buf = buf.."<select name=swpin><option".._swon..">ON</option><option".._swoff..">OFF</option></select>"
+        autoloadflag=""
+        if string.find(autoload,"YES")~=nil then
+          autoloadflag = "checked"
+        end
+        buf = buf.."<br/><br/><input type=\"checkbox\" name=\"autoload\" value=\"YES\" "..autoloadflag..">Auto loading<br/>"
+        buf = buf.."<input type=\"checkbox\" name=\"dosave\" value=\"YES\">Save config<br/><br/>"
+        buf = buf.."<button type=submit>Set</button></form>"
+        buf = buf.."<form id=form3 src=\"/\"><input type=\"hidden\" name=\"pin\" value=\"OFF\"><input type=\"hidden\" name=\"hour\" value=\"\"><input type=\"hidden\" name=\"min\" value=\"\"><button type=submit>Turn off Reset</button></form>"
         buf = buf..string.format("%2s:%2s (on) <br/> %2s:%2s (off)",tmrout(swhour),tmrout(swmin),tmrout(swhouroff),tmrout(swminoff))
         buf = buf.."</body></html>"
         client:send(buf)
