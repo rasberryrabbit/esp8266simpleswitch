@@ -95,6 +95,10 @@ function save_setting()
   fc:close()
 end
 
+function remove_setting()
+  file.remove(config)
+end
+
 srv=net.createServer(net.TCP)
 srv:listen(80,function(conn)
     conn:on("receive", function(client,request)
@@ -110,8 +114,8 @@ srv:listen(80,function(conn)
             end
         end
         tm = rtctime.epoch2cal(rtctime.get()+32400)
-        buf = buf..string.format("<html><body><h1>%04d/%02d/%02d %02d:%02d:%02d</h1>", tm["year"], tm["mon"], tm["day"], tm["hour"], tm["min"], tm["sec"])
-        buf = buf.."<h1> Set relay</h1><form id=form1 src=\"/\">Turn PIN1 <select name=\"pin\" onchange=\"form.submit()\">"
+        buf = buf..string.format("<html><body><h3>%04d/%02d/%02d %02d:%02d:%02d</h3>", tm["year"], tm["mon"], tm["day"], tm["hour"], tm["min"], tm["sec"])
+        buf = buf.."<h3> Set relay</h3><form id=form1 src=\"/\">Turn PIN1 <select name=\"pin\" onchange=\"form.submit()\">"
         local _on,_off = "",""
         if(_GET.pin == "ON")then
               _on = " selected=true"              
@@ -128,6 +132,14 @@ srv:listen(80,function(conn)
             _on = " selected=true"
           else
             _off = " selected=true"
+          end
+        end
+        -- delete setting.txt
+        if _GET.delete~=nil then
+          if _GET.delete=="YES" then
+            if pcall(remove_setting)~=true then
+              print("fail remove setting")
+            end
           end
         end
         -- hour, min
@@ -230,6 +242,7 @@ srv:listen(80,function(conn)
         buf = buf.."<input type=\"checkbox\" name=\"dosave\" value=\"YES\">Save config<br/><br/>"
         buf = buf.."<button type=submit>Set</button></form>"
         buf = buf.."<form id=form3 src=\"/\"><input type=\"hidden\" name=\"pin\" value=\"OFF\"><input type=\"hidden\" name=\"hour\" value=\"\"><input type=\"hidden\" name=\"min\" value=\"\"><button type=submit>Turn off Reset</button></form>"
+        buf = buf.."<form id=form4 src=\"/\"><input type=\"hidden\" name=\"delete\" value=\"YES\"><button type=submit>Delete setting</button></form>"
         buf = buf..string.format("%2s:%2s (on) <br/> %2s:%2s (off)",tmrout(swhour),tmrout(swmin),tmrout(swhouroff),tmrout(swminoff))
         buf = buf.."</body></html>"
         client:send(buf)
