@@ -17,7 +17,7 @@ if Resetta==1 then
     tmr.alarm(0, 5000, 0, function() dofile("riazzerawifi.lua") end)
 
 else
-    cnt = 10
+    cnt = 30
     tmr.alarm(0, 1000, 1, function()
       if wifi.sta.getip()==nil then
         cnt = cnt - 1
