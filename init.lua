@@ -2,6 +2,8 @@
 pin = 5 --Reset PIN
 Resetta=0   --Variable used to manage AP reset
 gpio.mode(pin,gpio.INPUT)   --Pin 5 in input mode
+gpio.mode(4,gpio.OUTPUT)
+gpio.write(4,gpio.HIGH)
 
 --If pin input is High let's start the nodemcu portal
 if (gpio.read(pin)==gpio.LOW) then 
@@ -34,7 +36,6 @@ else
       if wifi.sta.getip()==nil then
         cnt = cnt - 1
         if cnt==0 then
-          gpio.mode(4,gpio.OUTPUT)
           iptimer:register(500, tmr.ALARM_SINGLE, function()
             gpio.write(4,1-gpio.read(4))
           end)

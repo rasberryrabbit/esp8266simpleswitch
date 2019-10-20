@@ -54,6 +54,7 @@ function tryonofftime(hv, mv, sv, onoff)
         end
         if onoff~=nil and setflag then
           gpio.write(1, onoff)
+          gpio.write(4, 1-onoff)
         end
     end
     return setflag
@@ -140,11 +141,13 @@ srv:listen(80,function(conn)
         if(_GET.pin == "ON")then
               _on = " selected=true"              
               gpio.write(1, gpio.HIGH)
+              gpio.write(4, gpio.LOW)
               tmrcheck:stop()
               timeractive=0
         elseif(_GET.pin == "OFF")then
               _off = " selected=true"
               gpio.write(1, gpio.LOW)
+              gpio.write(4, gpio.HIGH)
               tmrcheck:stop()
               timeractive=0
         else
