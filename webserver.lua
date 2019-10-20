@@ -36,6 +36,11 @@ timeractive=0
 dotimer=0
 offsettime=32400
 
+-- set external offsettime
+if file.list()["config.lua"] then
+  dofile("config.lua")
+end
+
 tmrcheck=tmr.create()
 
 function tryonofftime(hv, mv, sv, onoff)
