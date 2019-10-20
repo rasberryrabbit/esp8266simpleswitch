@@ -1,8 +1,22 @@
 -- webserver.lua
 --webserver sample from the nodemcu github
-print(wifi.sta.getip())
 
-sntp.sync(nil,nil,function() print("sntp failed") end,nil)
+if wifi.getmode() == wifi.SOFTAP then
+  webip=wifi.ap.getip()
+  broadip=wifi.ap.getbroadcast()
+else
+  webip=wifi.sta.getip()
+  broadip=wifi.sta.getbroadcast()
+end
+
+print(webip)
+
+function synctime()
+  sntp.sync(nil,nil,function() print("sntp failed") end,nil)
+end
+
+pcall(synctime)
+
 if srv~=nil then
  srv:close()
 end
@@ -20,6 +34,9 @@ swhouroff=""
 swminoff=""
 timeractive=0
 dotimer=0
+_G.buf={}
+
+tmrcheck=tmr.create()
 
 function tryonofftime(hv, mv, sv, onoff)
     tm = rtctime.epoch2cal(rtctime.get()+32400)
@@ -75,11 +92,13 @@ function load_setting()
     fc:close()
     -- start timer
     if string.find(autoload,"YES") then
-      tmr.alarm(1, 1000, tmr.ALARM_AUTO, function()
+      tmrcheck.unregister()
+      tmrcheck:register(1000, tmr.ALARM_AUTO, function()
         tryonofftime(swhour, swmin, "", gpio.HIGH)
         tryonofftime(swhouroff, swminoff, "", gpio.LOW)
       end)
       timeractive=1
+      tmrcheck:start()
     end
   end
   end
@@ -114,18 +133,19 @@ srv:listen(80,function(conn)
             end
         end
         tm = rtctime.epoch2cal(rtctime.get()+32400)
-        buf = buf..string.format("<html><body><h3>%04d/%02d/%02d %02d:%02d:%02d</h3>", tm["year"], tm["mon"], tm["day"], tm["hour"], tm["min"], tm["sec"])
-        buf = buf.."<h3> Set relay</h3><form id=form1 src=\"/\">Turn PIN1 <select name=\"pin\" onchange=\"form.submit()\">"
+        _G.buf={}
+        _G.buf[#_G.buf+1] = string.format("<html><body><h3>%04d/%02d/%02d %02d:%02d:%02d</h3>", tm["year"], tm["mon"], tm["day"], tm["hour"], tm["min"], tm["sec"])
+        _G.buf[#_G.buf+1] = "<h3> Set relay</h3><form id=form1 src=\"/\">Turn PIN1 <select name=\"pin\" onchange=\"form.submit()\">"
         local _on,_off = "",""
         if(_GET.pin == "ON")then
               _on = " selected=true"              
               gpio.write(1, gpio.HIGH)
-              tmr.stop(1)
+              tmrcheck:stop()
               timeractive=0
         elseif(_GET.pin == "OFF")then
               _off = " selected=true"
               gpio.write(1, gpio.LOW)
-              tmr.stop(1)
+              tmrcheck:stop()
               timeractive=0
         else
           if gpio.read(1)==1 then
@@ -192,24 +212,26 @@ srv:listen(80,function(conn)
         end
         -- start timer
         if _GET.hour~=nil or _GET.min~=nil then
-          tmr.stop(1)
+          tmrcheck:stop()
           if newhour~="" or newmin~="" then
-              tmr.alarm(1, 1000, tmr.ALARM_AUTO, function()
+              tmrcheck:unregister()
+              tmrcheck:register(1000, tmr.ALARM_AUTO, function()
                 tryonofftime(swhour, swmin, "", gpio.HIGH)
                 tryonofftime(swhouroff, swminoff, "", gpio.LOW)
               end)
               timeractive=1
+              tmrcheck:start()
           else
               timeractive=0
           end
         end
-        buf = buf.."<option".._on..">ON</opton><option".._off..">OFF</option></select></form>"
+        _G.buf[#_G.buf+1] = "<option".._on..">ON</opton><option".._off..">OFF</option></select></form>"
         -- on timer
-        buf = buf.."<p>Timer : "
+        _G.buf[#_G.buf+1] = "<p>Timer : "
         if timeractive==0 then
-          buf = buf.."disabled"
+          _G.buf[#_G.buf+1] = "disabled"
         else
-          buf = buf.."enabled"
+          _G.buf[#_G.buf+1] = "enabled"
         end
         local texthour=""
         local textmin=""
@@ -223,9 +245,9 @@ srv:listen(80,function(conn)
         else
           textmin=swminoff
         end
-        buf = buf.."</p>"
-        buf = buf.."<form id=form2 src=\"/\">On/Off Time<input type=\"text\" name=\"hour\" value=\""..texthour.."\" size=3>"
-        buf = buf..":<input type=\"text\" name=\"min\" value=\""..textmin.."\" size=3>"
+        _G.buf[#_G.buf+1] = "</p>"
+        _G.buf[#_G.buf+1] = "<form id=form2 src=\"/\">On/Off Time<input type=\"text\" name=\"hour\" value=\""..texthour.."\" size=3>"
+        _G.buf[#_G.buf+1] = ":<input type=\"text\" name=\"min\" value=\""..textmin.."\" size=3>"
         _swon=""
         _swoff=""
         if swhour~="" or swmin~="" then
@@ -233,64 +255,35 @@ srv:listen(80,function(conn)
         else
           _swon = " selected=true"
         end        
-        buf = buf.."<select name=swpin><option".._swon..">ON</option><option".._swoff..">OFF</option></select>"
+        _G.buf[#_G.buf+1] = "<select name=swpin><option".._swon..">ON</option><option".._swoff..">OFF</option></select>"
         autoloadflag=""
         if string.find(autoload,"YES")~=nil then
           autoloadflag = "checked"
         end
-        buf = buf.."<br/><br/><input type=\"checkbox\" name=\"autoload\" value=\"YES\" "..autoloadflag..">Auto loading<br/>"
-        buf = buf.."<input type=\"checkbox\" name=\"dosave\" value=\"YES\">Save config<br/><br/>"
-        buf = buf.."<button type=submit>Set</button></form>"
-        buf = buf.."<form id=form3 src=\"/\"><input type=\"hidden\" name=\"pin\" value=\"OFF\"><input type=\"hidden\" name=\"hour\" value=\"\"><input type=\"hidden\" name=\"min\" value=\"\"><button type=submit>Turn off Reset</button></form>"
-        buf = buf.."<form id=form4 src=\"/\"><input type=\"hidden\" name=\"delete\" value=\"YES\"><button type=submit>Delete setting</button></form>"
-        buf = buf..string.format("%2s:%2s (on) <br/> %2s:%2s (off)",tmrout(swhour),tmrout(swmin),tmrout(swhouroff),tmrout(swminoff))
-        buf = buf.."</body></html>"
-        client:send(buf)
+        _G.buf[#_G.buf+1] = "<br/><br/><input type=\"checkbox\" name=\"autoload\" value=\"YES\" "..autoloadflag..">Auto loading<br/>"
+        _G.buf[#_G.buf+1] = "<input type=\"checkbox\" name=\"dosave\" value=\"YES\">Save config<br/><br/>"
+        _G.buf[#_G.buf+1] = "<button type=submit>Set</button></form>"
+        _G.buf[#_G.buf+1] = "<form id=form3 src=\"/\"><input type=\"hidden\" name=\"pin\" value=\"OFF\"><input type=\"hidden\" name=\"hour\" value=\"\"><input type=\"hidden\" name=\"min\" value=\"\"><button type=submit>Turn off Reset</button></form>"
+        _G.buf[#_G.buf+1] = "<form id=form4 src=\"/\"><input type=\"hidden\" name=\"delete\" value=\"YES\"><button type=submit>Delete setting</button></form>"
+        _G.buf[#_G.buf+1] = string.format("%2s:%2s (on) <br/> %2s:%2s (off)",tmrout(swhour),tmrout(swmin),tmrout(swhouroff),tmrout(swminoff))
+        _G.buf[#_G.buf+1] = "</body></html>"
+        conn:send(table.remove(_G.buf,1))
     end)
-    conn:on("sent", function (c) c:close() end)
+    conn:on("sent", function (c) 
+      if #_G.buf > 0 then
+        conn:send(table.remove(_G.buf,1))
+      else
+        conn:close()
+      end
+    end)
 end)
 
--- ssdp
-
-net.multicastJoin(wifi.sta.getip(), "239.255.255.250")
-
-local ssdp_notify = "NOTIFY * HTTP/1.1\r\n"..
-"HOST: 239.255.255.250:1900\r\n"..
-"CACHE-CONTROL: max-age=100\r\n"..
-"NT: upnp:rootdevice\r\n"..
-"USN: 6e50e521-6abc-4a06-8f5d-813ee1"..string.format("%x",node.chipid()).."::upnp:rootdevice\r\n"..
-"NTS: ssdp:alive\r\n"..
-"SERVER: NodeMCU/20190304 UPnP/1.1\r\n"..
-"Location: http://"..wifi.sta.getip().."/switch.xml\r\n\r\n"
-
-
-local ssdp_response = "HTTP/1.1 200 OK\r\n"..
-"Cache-Control: max-age=100\r\n"..
-"EXT:\r\n"..
-"SERVER: NodeMCU/20190304 UPnP/1.1\r\n"..
-"ST: upnp:rootdevice\r\n"..
-"USN: uuid:6e50e521-6abc-4a06-8f5d-813ee1"..string.format("%x",node.chipid()).."\r\n"..
-"Location: http://"..wifi.sta.getip().."/switch.xml\r\n\r\n"
-
-local udp_response = wifi.sta.getip().."\n"..string.format("%x",node.chipid()).."\nSWITCH-INFO\npin[ON|OFF],hour[24],min[60],swpin[ON|OFF]\n"
-
-local function response(connection, payLoad, port, ip)
-    if string.match(payLoad,"M-SEARCH") then
-        connection:send(port,ip,ssdp_response)
-    end
-end
-
-UPnPd = net.createUDPSocket()
-UPnPd:on("receive", response )
-UPnPd:listen(1900,"0.0.0.0")
-
-tmr.alarm(3, 10000, 1, function()
-    UPnPd:send(1900,'239.255.255.250',ssdp_notify)
-end)
-
+local udp_response = webip.."\n"..string.format("%x",node.chipid()).."\nSWITCH-INFO\npin[ON|OFF],hour[24],min[60],swpin[ON|OFF]\n"
+    
 udp50k = net.createUDPSocket()
-
-tmr.alarm(5, 3000, 1, function()
-  udp50k:send(50000, wifi.sta.getbroadcast(), udp_response)
+udptmr=tmr.create()
+udptmr:register(3000, tmr.ALARM_AUTO, function()
+  udp50k:send(50000, broadip, udp_response)
 end)
+udptmr:start()
 

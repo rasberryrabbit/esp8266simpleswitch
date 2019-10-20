@@ -4,7 +4,7 @@
 wifi.sta.disconnect()
 wifi.setmode(wifi.STATIONAP)
 --ESP SSID generated wiht its chipid
-wifi.ap.config({ssid="Mynode-"..node.chipid()
+wifi.ap.config({ssid="Switch-"..node.chipid()
 , auth=wifi.OPEN})
 enduser_setup.manual(true)
 enduser_setup.start(

@@ -1,6 +1,4 @@
 -- init.lua
---Access Point management
--- this code from http://www.microdev.it/wp/en/2016/11/28/nodemcu-enduser_setup-module-lua-samplepart2/
 pin = 5 --Reset PIN
 Resetta=0   --Variable used to manage AP reset
 gpio.mode(pin,gpio.INPUT)   --Pin 5 in input mode
@@ -11,30 +9,50 @@ if (gpio.read(pin)==gpio.LOW) then
     Resetta=1
 end
 
+starttmr=tmr.create()
+starttmr:register(3000, tmr.ALARM_SINGLE, function()
+    if file.list()["webserver.lua"] then
+        dofile("webserver.lua")
+    end
+end)
+
 -- Check if reset the AP credential
 if Resetta==1 then 
     -- Start the nodemcu portal
-    tmr.alarm(0, 5000, 0, function() dofile("riazzerawifi.lua") end)
+    local aptimer=tmr.create()
+    aptimer:register(5000,tmr.ALARM_SINGLE, function()
+      if file.list()["riazzerawifi.lua"] then
+        dofile("riazzerawifi.lua")
+      end
+    end)
+    aptimer:start()
 
 else
     cnt = 30
-    tmr.alarm(0, 1000, 1, function()
+    wbtimer=tmr.create()
+    wbtimer:register(1000, tmr.ALARM_AUTO, function()
       if wifi.sta.getip()==nil then
         cnt = cnt - 1
         if cnt==0 then
-          tmr.stop(0)
           gpio.mode(4,gpio.OUTPUT)
-          tmr.alarm(0, 500, 1, function()
+          iptimer:register(500, tmr.ALARM_SINGLE, function()
             gpio.write(4,1-gpio.read(4))
           end)
+          gpio.write(4,1-gpio.read(4))
+          iptimer:start()
+
           print("Cannot get IP")
+          wifi.sta.disconnect()
+          wifi.setmode(wifi.SOFTAP)
+          --ESP SSID generated wiht its chipid
+          wifi.ap.config({ssid="Switch-"..node.chipid()
+          , auth=wifi.OPEN})
+          print(wifi.ap.getip())
         end
       else
-        tmr.stop(0)
-        tmr.alarm(0, 3000, tmr.ALARM_SINGLE, function()
-          dofile("webserver.lua")
-        end)
+        wbtimer:unregister()
+        starttmr:start()
       end
     end)
-
+    wbtimer:start()
 end
