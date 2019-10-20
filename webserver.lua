@@ -35,6 +35,19 @@ swminoff=""
 timeractive=0
 dotimer=0
 offsettime=32400
+lastget=tmr.time()
+dosend=0
+
+function updateget()
+  ct=tmr.time()
+  delta=ct-lastget
+  if delta<0 then delta = delta + 2147483648 end
+  if delta>=1 then
+    lastget=ct
+    return true
+  end
+  return false
+end
 
 -- set external offsettime
 if file.list()["config.lua"] then
@@ -132,16 +145,20 @@ srv:listen(80,function(conn)
             _, _, method, path = string.find(request, "([A-Z]+) (.+) HTTP")
         end
         -- ignore favicon request
-        if path=="/favicon.ico" then
-          return
-        end
         local _GET = {}
         if (vars ~= nil)then
             for k, v in string.gmatch(vars, "(%w+)=(%w+)&*") do
                 _GET[k] = v
             end
         end
+        if path=="/favicon.ico" then
+          return
+        end
         vars=nil
+        request=nil
+        -- delay 2 second per request
+        while updateget()==false do
+        end
         tm = rtctime.epoch2cal(rtctime.get()+offsettime)
         buf={}
         buf[#buf+1] = string.format("<html><body><h3>%04d/%02d/%02d %02d:%02d:%02d</h3>", tm["year"], tm["mon"], tm["day"], tm["hour"], tm["min"], tm["sec"])
@@ -286,6 +303,7 @@ srv:listen(80,function(conn)
         conn:send(table.remove(buf,1))
       else
         c:close()
+        buf=nil
       end
     end)
 end)
